@@ -149,63 +149,104 @@ def dessiner_grille():
 
 def est_valide(grille, ligne, colonne, num):
     """Vérifie si un chiffre peut être placé à une position donnée."""
-    # Vérification de la ligne
     if num in grille[ligne]:
         return False
+    if any(grille[i][colonne] == num for i in range(9)):
+        return False
 
-    # Vérification de la colonne
-    for i in range(9):
-        if grille[i][colonne] == num:
-            return False
-
-    # Vérification du carré 3x3
-    ligne_debut = (ligne // 3) * 3
-    colonne_debut = (colonne // 3) * 3
+    ligne_debut, colonne_debut = (ligne // 3) * 3, (colonne // 3) * 3
     for i in range(3):
         for j in range(3):
             if grille[ligne_debut + i][colonne_debut + j] == num:
                 return False
-
     return True
-
-def backtracking(grille):
-    """Fonction de backtracking pour résoudre le Sudoku."""
-    global iterations
+def mettre_a_jour_domaines(grille):
+    """Crée une matrice des possibilités pour chaque case vide."""
+    domaines = [[set(range(1, 10)) if grille[i][j] == 0 else set() for j in range(9)] for i in range(9)]
+    
     for ligne in range(9):
         for colonne in range(9):
-            if grille[ligne][colonne] == 0:  # Cherche une case vide
-                for num in range(1, 10):
-                    if est_valide(grille, ligne, colonne, num):
-                        grille[ligne][colonne] = num  # Essaye ce chiffre
-                        iterations += 1
-                        if backtracking(grille):  # Recursion
-                            return True
-                        grille[ligne][colonne] = 0  # Annule si ça ne marche pas
-                return False  # Aucun chiffre valide trouvé
-    return True  # Résolution terminée
+            if grille[ligne][colonne] != 0:
+                num = grille[ligne][colonne]
+                for i in range(9):
+                    domaines[i][colonne].discard(num)  # Supprime des colonnes
+                    domaines[ligne][i].discard(num)  # Supprime des lignes
+                
+                ligne_debut, colonne_debut = (ligne // 3) * 3, (colonne // 3) * 3
+                for i in range(3):
+                    for j in range(3):
+                        domaines[ligne_debut + i][colonne_debut + j].discard(num)  # Supprime de la sous-grille
+    return domaines
 
-def resoudre_sudoku(grille):
-    """Résolution avec Backtracking et heuristique de contraintes."""
+def backtracking_avec_heuristique(grille, domaines):
+    """Backtracking amélioré avec heuristique MRV et propagation des contraintes."""
+    global iterations
+    iterations += 1
+
+    # Trouver la meilleure case à remplir
+    meilleure_case = trouver_meilleure_case(grille, domaines)
+    if meilleure_case is None:
+        return True  # Toutes les cases sont remplies
+    
+    ligne, colonne = meilleure_case
+    for num in sorted(domaines[ligne][colonne]):  # Trier les valeurs possibles pour homogénéiser
+        if est_valide(grille, ligne, colonne, num):
+            grille[ligne][colonne] = num  # Placer le chiffre
+            
+            # Sauvegarde des domaines avant modification
+            domaines_sauvegarde = [row[:] for row in domaines]
+            
+            # Mise à jour des domaines avec la propagation
+            domaines[ligne][colonne] = set()
+            for i in range(9):
+                domaines[i][colonne].discard(num)
+                domaines[ligne][i].discard(num)
+
+            ligne_debut, colonne_debut = (ligne // 3) * 3, (colonne // 3) * 3
+            for i in range(3):
+                for j in range(3):
+                    domaines[ligne_debut + i][colonne_debut + j].discard(num)
+
+            # Récursion
+            if backtracking_avec_heuristique(grille, domaines):
+                return True
+            
+            # Annuler si ça ne marche pas
+            grille[ligne][colonne] = 0
+            domaines = domaines_sauvegarde  # Restaurer les domaines
+    
+    return False  # Aucun chiffre valide trouvé
+def trouver_meilleure_case(grille, domaines):
+    """Trouve la case vide avec le moins de choix possibles (MRV)."""
+    min_options = 10  # Il y a au max 9 choix possibles
+    meilleure_case = None
+    
+    for ligne in range(9):
+        for colonne in range(9):
+            if grille[ligne][colonne] == 0:
+                nb_options = len(domaines[ligne][colonne])
+                if nb_options < min_options:
+                    min_options = nb_options
+                    meilleure_case = (ligne, colonne)
+    
+    return meilleure_case
+
+def resoudre_sudoku_heuristique(grille):
+    """Résolution avec heuristique MRV et propagation des contraintes."""
     global iterations, temps_resolution
-
-    # Réinitialiser les variables
     iterations = 0
     temps_resolution = 0
 
-    # Démarrage du chronomètre
     start_time = time.time()
-
-    # Continue avec le backtracking si nécessaire
-    backtracking(grille)
-
-    # Arrêter le chronomètre
+    
+    domaines = mettre_a_jour_domaines(grille)
+    backtracking_avec_heuristique(grille, domaines)
+    
     temps_resolution = time.time() - start_time
 
-# Lancer le menu de sélection
 while True:
     menu_selection()
 
-    # Boucle principale pour l'affichage de la grille
     while True:
         dessiner_grille()
         for event in pygame.event.get():
@@ -217,7 +258,7 @@ while True:
                 if 50 <= x <= (LARGEUR_FENETRE - 50) // 2 and HAUTEUR_FENETRE - 70 <= y <= HAUTEUR_FENETRE:
                     break  # Retour au menu
                 elif (LARGEUR_FENETRE // 2 + 50) <= x <= (LARGEUR_FENETRE - 50) and HAUTEUR_FENETRE - 70 <= y <= HAUTEUR_FENETRE:
-                    resoudre_sudoku(grille)  # Résoudre le Sudoku
+                    resoudre_sudoku_heuristique(grille)  # Utilise l'algorithme amélioré
         else:
             continue
         break
