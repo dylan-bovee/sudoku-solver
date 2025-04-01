@@ -1,25 +1,21 @@
 import pygame
-import sys
+import time
 
-# Initialisation de Pygame
-pygame.init()
+# Taille de la grille
+M = 9
+TAILLE_CASE = 50
+MARGE = 20
+LARGEUR_FENETRE = M * TAILLE_CASE + 2 * MARGE
+HAUTEUR_FENETRE = M * TAILLE_CASE + 2 * MARGE
 
-# Dimensions de la fenêtre
-largeur_fenetre = 600
-hauteur_fenetre = 600
+# Couleurs
+BLANC = (255, 255, 255)
+NOIR = (0, 0, 0)
+GRIS = (200, 200, 200)
+BLEU = (0, 0, 255)
 
-# Création de la fenêtre
-fenetre = pygame.display.set_mode((largeur_fenetre, hauteur_fenetre))
-pygame.display.set_caption("Grille Sudoku avec caractères")
-
-# Taille de chaque case
-taille_case = largeur_fenetre // 9
-
-# Définition de la police pour le texte
-police = pygame.font.Font(None, 50)  # Police par défaut, taille 50
-
-# Exemple de grille avec quelques chiffres (0 signifie case vide)
-grille = [
+# Initialisation de la grille
+sudoku_grille = [
     [0, 7, 2, 9, 0, 0, 0, 3, 0],
     [0, 0, 1, 0, 0, 6, 0, 8, 0],
     [0, 0, 0, 0, 4, 0, 0, 6, 0],
@@ -31,47 +27,68 @@ grille = [
     [1, 0, 0, 8, 5, 0, 0, 0, 0]
 ]
 
-def afficher_texte(surface, texte, x, y):
-    """Affiche un texte centré dans une case."""
-    if texte != 0:  # Ne pas afficher les cases vides (0)
-        texte_surface = police.render(str(texte), True, (0, 0, 0))  # Rendu du texte
-        texte_rect = texte_surface.get_rect(center=(x, y))  # Centrage dans la case
-        surface.blit(texte_surface, texte_rect)  # Affichage du texte
+# Fonction de dessin
+def dessiner_grille(fenetre):
+    fenetre.fill(BLANC)
+    for i in range(M + 1):
+        epaisseur = 3 if i % 3 == 0 else 1
+        pygame.draw.line(fenetre, NOIR, (MARGE, MARGE + i * TAILLE_CASE), (MARGE + M * TAILLE_CASE, MARGE + i * TAILLE_CASE), epaisseur)
+        pygame.draw.line(fenetre, NOIR, (MARGE + i * TAILLE_CASE, MARGE), (MARGE + i * TAILLE_CASE, MARGE + M * TAILLE_CASE), epaisseur)
+    
+    font = pygame.font.Font(None, 40)
+    for i in range(M):
+        for j in range(M):
+            if sudoku_grille[i][j] != 0:
+                texte = font.render(str(sudoku_grille[i][j]), True, NOIR)
+                fenetre.blit(texte, (MARGE + j * TAILLE_CASE + 15, MARGE + i * TAILLE_CASE + 10))
 
-# Remplir l'arrière-plan en blanc
-fenetre.fill((255, 255, 255))
+def est_valide(grille, ligne, colonne, num):
+    for x in range(9):
+        if grille[ligne][x] == num or grille[x][colonne] == num:
+            return False
+    debut_ligne, debut_colonne = (ligne // 3) * 3, (colonne // 3) * 3
+    for i in range(3):
+        for j in range(3):
+            if grille[debut_ligne + i][debut_colonne + j] == num:
+                return False
+    return True
 
-# Dessiner la grille 9x9 avec des bordures épaisses pour les blocs 3x3
-for i in range(10):  # De 0 à 9 pour inclure les bords
-    x = i * taille_case
-    y = i * taille_case
+def resoudre_sudoku(grille, fenetre):
+    for ligne in range(M):
+        for colonne in range(M):
+            if grille[ligne][colonne] == 0:
+                for num in range(1, 10):
+                    if est_valide(grille, ligne, colonne, num):
+                        grille[ligne][colonne] = num
+                        dessiner_grille(fenetre)
+                        pygame.display.update()
+                        time.sleep(0.05)
+                        if resoudre_sudoku(grille, fenetre):
+                            return True
+                        grille[ligne][colonne] = 0
+                        dessiner_grille(fenetre)
+                        pygame.display.update()
+                return False
+    return True
 
-    # Épaisseur de la ligne
-    epaisseur = 3 if i % 3 == 0 else 1  # Épaisseur plus grande toutes les 3 lignes
+def main():
+    pygame.init()
+    fenetre = pygame.display.set_mode((LARGEUR_FENETRE, HAUTEUR_FENETRE))
+    pygame.display.set_caption("Sudoku Solver")
+    
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    resoudre_sudoku(sudoku_grille, fenetre)
+        
+        dessiner_grille(fenetre)
+        pygame.display.update()
+    
+    pygame.quit()
 
-    # Dessiner les lignes horizontales
-    pygame.draw.line(fenetre, (0, 0, 0), (0, y), (largeur_fenetre, y), epaisseur)
-
-    # Dessiner les lignes verticales
-    pygame.draw.line(fenetre, (0, 0, 0), (x, 0), (x, hauteur_fenetre), epaisseur)
-
-# Dessiner une bordure autour de la grille
-pygame.draw.rect(fenetre, (0, 0, 0), (0, 0, largeur_fenetre, hauteur_fenetre), 5)
-
-# Afficher les chiffres de la grille dans les cases
-for ligne in range(9):
-    for colonne in range(9):
-        valeur = grille[ligne][colonne]
-        x_centre = colonne * taille_case + taille_case // 2
-        y_centre = ligne * taille_case + taille_case // 2
-        afficher_texte(fenetre, valeur, x_centre, y_centre)
-
-# Mise à jour de l'affichage
-pygame.display.flip()
-
-# Boucle principale du jeu
-while True:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+if __name__ == "__main__":
+    main()
